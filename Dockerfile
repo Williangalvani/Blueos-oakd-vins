@@ -1,13 +1,50 @@
 FROM python:3.11-slim
 
-COPY app /app
-RUN python -m pip install /app --extra-index-url https://www.piwheels.org/simple
 
-EXPOSE 8000/tcp
+RUN apt update && apt install -y git cmake build-essential libeigen3-dev libopencv-dev libceres-dev tmux wget curl openssl zip make autoconf automake pkg-config libudev-dev libusb-1.0-0-dev
 
-LABEL version="0.0.3"
+COPY install_ttyd.sh .
 
-ARG IMAGE_NAME
+RUN ./install_ttyd.sh
+
+# Install VINS-Fusion
+RUN git clone --branch apm_wiki https://github.com/chobitsfan/VINS-Fusion.git
+RUN cd VINS-Fusion/vins_estimator && cmake . && make -j$(nproc)
+
+#install depthai-core
+# Todo: lock version. tested with 2.25.0
+RUN git clone --branch v2.30.0 https://github.com/luxonis/depthai-core
+RUN cd depthai-core && git submodule update --init --recursive
+RUN cd depthai-core && cmake -S. -Bbuild
+RUN cd depthai-core && cmake --build build --parallel $(nproc) --target install
+
+
+# Install oak_d_vins_cpp
+RUN git clone --branch apm_wiki https://github.com/williangalvani/oak_d_vins_cpp.git
+RUN cd oak_d_vins_cpp && cmake -D'depthai_DIR=../depthai-core/build/install/lib/cmake/depthai' .
+RUN cd oak_d_vins_cpp && make -j$(nproc)
+
+#install mavlink-udp-proxy
+RUN git clone --branch apm_wiki https://github.com/chobitsfan/mavlink-udp-proxy.git
+RUN cd mavlink-udp-proxy && git submodule update --init --recursive && ./build_it
+
+COPY entrypoint.sh .
+
+COPY tmux.conf /etc/tmux.conf
+
+RUN apt install -y nginx
+
+COPY nginx.conf /etc/nginx/nginx.conf
+
+COPY register_service.json /app/register_service.json
+
+RUN pip install requests eclipse-zenoh
+
+COPY mavlink2restForwarder.py .
+
+LABEL version="0.0.1"
+
+ARG IMAGE_NAME=OAKD_VINS
 
 LABEL permissions='\
 {\
@@ -15,7 +52,10 @@ LABEL permissions='\
     "8000/tcp": {}\
   },\
   "HostConfig": {\
-    "Binds":["/usr/blueos/extensions/$IMAGE_NAME:/app"],\
+    "Binds":["/dev/bus/usb:/dev/bus/usb"],\
+    "DeviceCgroupRules": [\
+      "c 189:* rmw"\
+    ],\
     "ExtraHosts": ["host.docker.internal:host-gateway"],\
     "PortBindings": {\
       "8000/tcp": [\
@@ -27,29 +67,24 @@ LABEL permissions='\
   }\
 }'
 
-ARG AUTHOR
-ARG AUTHOR_EMAIL
 LABEL authors='[\
     {\
-        "name": "$AUTHOR",\
-        "email": "$AUTHOR_EMAIL"\
+        "name": "Willian Galvani",\
+        "email": "willian@bluerobotics.com"\
     }\
 ]'
 
-ARG MAINTAINER
-ARG MAINTAINER_EMAIL
 LABEL company='{\
         "about": "",\
-        "name": "$MAINTAINER",\
-        "email": "$MAINTAINER_EMAIL"\
+        "name": "Blue Robotics",\
+        "email": "support@bluerobotics.com"\
     }'
-LABEL type="example"
-ARG REPO
-ARG OWNER
-LABEL readme='https://raw.githubusercontent.com/$OWNER/$REPO/{tag}/README.md'
+LABEL type="device-integration"
+
+LABEL readme='https://raw.githubusercontent.com/williangalvani/Blueos-oakd-vins/{tag}/README.md'
 LABEL links='{\
-        "source": "https://github.com/$OWNER/$REPO"\
+        "source": "https://github.com/williangalvani/Blueos-oakd-vins"\
     }'
 LABEL requirements="core >= 1.1"
-
-ENTRYPOINT litestar run --host 0.0.0.0
+RUN chmod +x entrypoint.sh
+ENTRYPOINT ["/entrypoint.sh"]

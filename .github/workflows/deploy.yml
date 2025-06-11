@@ -2,13 +2,12 @@ name: Deploy BlueOS Extension Image
 
 on:
   # Automatically run when a new commit is added to the repository
-  #push:
+  push:
   # Automatically run when someone makes a Pull Request to the repository
   #pull_request:
   # Run manually
   workflow_dispatch:
-  # NOTE: caches may be removed if not run weekly
-  #  -> may be worth scheduling for every 6 days
+
 
 jobs:
   deploy-docker-image:
@@ -20,8 +19,8 @@ jobs:
           docker-username: ${{ secrets.DOCKER_USERNAME }}
           docker-password: ${{ secrets.DOCKER_PASSWORD }}
           github-token: ${{ secrets.GITHUB_TOKEN }}
-          image-name: ${{ vars.IMAGE_NAME || 'quickstart-test' }}
-          author: ${{ vars.MY_NAME }}
-          author-email: ${{ vars.MY_EMAIL }}
-          maintainer: ${{ vars.ORG_NAME }}
-          maintainer-email: ${{ vars.ORG_EMAIL }}
+          image-name: oakd-vins
+          author: Willian Galvani
+          author-email: williangalvani@gmail.com
+          maintainer: Willian Galvani
+          maintainer-email: williangalvani@gmail.com
